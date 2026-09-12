@@ -228,7 +228,8 @@ func (r *projectRepository) applyFilter(q *gorm.DB, filter ProjectListFilter) *g
 	}
 	if keyword := strings.TrimSpace(filter.Keyword); keyword != "" {
 		like := "%" + escapeLike(keyword) + "%"
-		q = q.Where("title LIKE ? OR interviewee_name LIKE ?", like, like)
+		// 显式声明 ESCAPE，保证 MySQL 与测试用 SQLite 都把 \%、\_、\\ 当字面量。
+		q = q.Where("title LIKE ? ESCAPE '\\' OR interviewee_name LIKE ? ESCAPE '\\'", like, like)
 	}
 	return q
 }

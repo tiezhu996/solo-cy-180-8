@@ -71,11 +71,11 @@ func TestProjectRepositoryListCombinedFilterSQL(t *testing.T) {
 	repo := NewProjectRepository(db)
 	filter := ProjectListFilter{Status: "in_progress", Tags: []string{"抗战", "知青"}, Keyword: "王奶"}
 
-	// count 查询：状态、标签 AND 子查询、标题/受访者 LIKE 三个条件同时出现。
+	// count 查询：状态、标签 AND 子查询、标题/受访者 LIKE（显式 ESCAPE）三个条件同时出现。
 	mock.ExpectQuery(`SELECT count\(\*\) FROM `+"`projects`"+
 		` WHERE status = \? AND id IN \(SELECT `+"`project_id`"+` FROM `+"`project_tags`"+
 		` WHERE name IN \(\?,\?\) GROUP BY `+"`project_id`"+
-		` HAVING COUNT\(DISTINCT name\) >= \?\) AND \(title LIKE \? OR interviewee_name LIKE \?\)`).
+		` HAVING COUNT\(DISTINCT name\) >= \?\) AND \(title LIKE \? ESCAPE '\\' OR interviewee_name LIKE \? ESCAPE '\\'\)`).
 		WithArgs("in_progress", "抗战", "知青", int64(2), "%王奶%", "%王奶%").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectQuery(`SELECT \* FROM `+"`projects`").
