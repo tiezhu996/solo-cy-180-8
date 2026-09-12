@@ -12,12 +12,21 @@ import {
 import type { CreateProjectPayload, UpdateProjectPayload } from '../api/project'
 import type { Paged, Project } from '../api/types'
 
+interface ProjectListParams {
+  page?: number
+  page_size?: number
+  status?: string
+  tag?: string[]
+  keyword?: string
+  mine?: boolean
+}
+
 interface ProjectState {
   projects: Project[]
   total: number
   loading: boolean
   detail: Project | null
-  fetchList: (params?: { page?: number; page_size?: number; status?: string; mine?: boolean }) => Promise<void>
+  fetchList: (params?: ProjectListParams) => Promise<void>
   fetchDetail: (id: number) => Promise<Project>
   create: (payload: CreateProjectPayload) => Promise<Project>
   update: (id: number, payload: UpdateProjectPayload) => Promise<Project>
@@ -41,6 +50,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
             page: params.page || 1,
             page_size: params.page_size || 20,
             status: params.status || '',
+            tag: params.tag,
+            keyword: params.keyword || '',
           })
       set({ projects: paged.list, total: paged.total, loading: false })
     } catch (e) {

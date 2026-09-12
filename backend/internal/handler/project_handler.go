@@ -1,7 +1,12 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/oralhistory/oralhistory/internal/constants"
@@ -10,6 +15,26 @@ import (
 	"github.com/oralhistory/oralhistory/internal/service"
 	"github.com/oralhistory/oralhistory/internal/util"
 )
+
+// bindUpdateProject 绑定编辑请求，并探测 body 中是否显式携带 tags 字段：
+// 缺省 tags 时保留原标签；tags 为空数组/null 时清空标签。
+func bindUpdateProject(c *gin.Context, req *dto.UpdateProjectRequest) bool {
+	raw, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		util.Fail(c, http.StatusBadRequest, constants.CodeValidation, constants.MsgInvalidBody)
+		return false
+	}
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		util.Fail(c, http.StatusBadRequest, constants.CodeValidation, fmt.Sprintf("%s: %v", constants.MsgValidationFailed, err))
+		return false
+	}
+	if _, ok := probe["tags"]; ok {
+		req.UpdateTags = true
+	}
+	c.Request.Body = io.NopCloser(bytes.NewReader(raw))
+	return bindJSON(c, req)
+}
 
 // ProjectHandler 采访项目接口处理器。
 type ProjectHandler struct {
@@ -58,19 +83,20 @@ func (h *ProjectHandler) Get(c *gin.Context) {
 	util.OK(c, project)
 }
 
-// List 项目列表（可按状态筛选）。
+// List 项目列表（状态/标签/关键字可组合筛选，保持分页）。
 func (h *ProjectHandler) List(c *gin.Context) {
-	var p dto.PageParams
-	if !bindQuery(c, &p) {
+	var q dto.ProjectListQuery
+	if !bindQuery(c, &q) {
 		return
 	}
-	p.Normalize()
-	projects, total, err := h.projectSvc.List(p.Page, p.PageSize, c.Query("status"))
+	q.Normalize()
+	projects, total, err := h.projectSvc.List(q.Page, q.PageSize, &q)
 	if err != nil {
 		c.Error(err)
 		return
 	}
-	util.OK(c, gin.H{"list": projects, "total": total, "page": p.Page, "page_size": p.PageSize})
+	h.logger.Info(fmt.Sprintf(constants.LogProjectListSearch, q.Page, q.PageSize, q.Status, len(q.Tag), q.Keyword))
+	util.OK(c, gin.H{"list": projects, "total": total, "page": q.Page, "page_size": q.PageSize})
 }
 
 // ListMine 我的项目列表。
@@ -105,7 +131,7 @@ func (h *ProjectHandler) Update(c *gin.Context) {
 		return
 	}
 	var req dto.UpdateProjectRequest
-	if !bindJSON(c, &req) {
+	if !bindUpdateProject(c, &req) {
 		return
 	}
 	project, err := h.projectSvc.Update(actor, id, &req)

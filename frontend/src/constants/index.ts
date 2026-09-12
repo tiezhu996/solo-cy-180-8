@@ -37,6 +37,10 @@ export const PROJECT_STATUS_TEXT: Record<string, string> = {
   [PROJECT_STATUS_ARCHIVED]: '已归档',
 }
 
+// 项目标签约束（与后端 constants/project_tag.go 同步）
+export const PROJECT_TAG_MAX_COUNT = 5
+export const PROJECT_TAG_MAX_LENGTH = 32
+
 // 录音状态机枚举（与后端 constants/recording_status.go 同步）
 export const RECORDING_STATUS_RECORDING = 'recording'
 export const RECORDING_STATUS_PROCESSING = 'processing'

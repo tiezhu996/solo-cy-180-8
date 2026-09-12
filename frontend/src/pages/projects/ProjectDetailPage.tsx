@@ -4,7 +4,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import AudioPlayer from '../../components/AudioPlayer'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import EmptyState from '../../components/EmptyState'
+import ProjectForm, { type ProjectFormValues } from '../../components/ProjectForm'
 import StatusBadge from '../../components/StatusBadge'
+import TagInput from '../../components/TagInput'
 import {
   PROJECT_STATUS_ARCHIVED,
   PROJECT_STATUS_COMPLETED,
@@ -21,12 +23,13 @@ export default function ProjectDetailPage() {
   const { id } = useParams()
   const projectId = Number(id)
   const navigate = useNavigate()
-  const { detail, fetchDetail, transitionStatus, remove } = useProjectStore()
+  const { detail, fetchDetail, update, transitionStatus, remove } = useProjectStore()
   const { questions, fetchByProject, create: createQuestion, remove: removeQuestion } = useQuestionStore()
   const { recordings, fetchByProject: fetchRecordings } = useRecordingStore()
   const { markers, fetchByProject: fetchMarkers, create: createMarker } = useTimelineStore()
   const [newQuestion, setNewQuestion] = useState('')
   const [message, setMessage] = useState('')
+  const [editing, setEditing] = useState(false)
 
   useEffect(() => {
     if (projectId) {
@@ -44,6 +47,18 @@ export default function ProjectDetailPage() {
     setMessage('采访问题已添加')
     setTimeout(() => setMessage(''), 3000)
   }, [createQuestion, newQuestion, projectId])
+
+  const archived = detail?.status === PROJECT_STATUS_ARCHIVED
+
+  const handleEdit = useCallback(
+    async (values: ProjectFormValues) => {
+      await update(projectId, values)
+      setEditing(false)
+      setMessage('采访项目更新成功')
+      setTimeout(() => setMessage(''), 3000)
+    },
+    [update, projectId],
+  )
 
   const markersOf = (recordingId: number) => markers.filter((m) => m.recording_id === recordingId)
 
@@ -81,8 +96,24 @@ export default function ProjectDetailPage() {
             <div className="detail-label">背景简介</div>
             <div className="detail-value">{detail.background || '-'}</div>
           </div>
+          <div>
+            <div className="detail-label">项目标签</div>
+            <div className="detail-value">
+              {detail.tags && detail.tags.length > 0 ? (
+                <TagInput value={detail.tags} onChange={() => undefined} readonly />
+              ) : (
+                <span className="muted">暂无标签</span>
+              )}
+            </div>
+          </div>
         </div>
         <div className="row-actions" style={{ marginTop: 12 }}>
+          {!archived && (
+            <button className="btn btn-plain btn-small" onClick={() => setEditing(true)}>
+              编辑项目信息
+            </button>
+          )}
+          {archived && <span className="muted">项目已归档，信息与标签均为只读</span>}
           {detail.status !== PROJECT_STATUS_ARCHIVED && (
             <button
               className="btn btn-primary btn-small"
@@ -156,6 +187,25 @@ export default function ProjectDetailPage() {
           </div>
         )}
       </section>
+
+      {editing && (
+        <div className="modal-mask" onClick={() => setEditing(false)}>
+          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">编辑采访项目</div>
+            <ProjectForm
+              initial={{
+                title: detail.title,
+                interviewee_name: detail.interviewee_name,
+                birth_year: detail.birth_year,
+                background: detail.background,
+                tags: detail.tags,
+              }}
+              onSubmit={handleEdit}
+              submitText="保存修改"
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

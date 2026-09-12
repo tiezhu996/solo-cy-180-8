@@ -731,3 +731,88 @@ code {
   border-radius: 4px;
   font-size: 12px;
 }
+
+/* ===== 项目标签 ===== */
+.tag-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: var(--primary-dark);
+  border: 1px solid #c7d2fe;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.tag-chip-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.tag-chip-link {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.tag-chip-link:hover {
+  background: #c7d2fe;
+}
+
+.tag-chip-active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary-dark);
+}
+
+.tag-chip-active .tag-chip-close {
+  color: #fff;
+}
+
+.tag-filter,
+.keyword-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-filter input,
+.keyword-search input {
+  width: 220px;
+}
+
+.tag-input .inline-form {
+  margin-top: 6px;
+}
+
+.tag-hint {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tag-error {
+  color: var(--danger);
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: var(--muted);
+}

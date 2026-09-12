@@ -139,12 +139,12 @@ npm run dev                # 默认 http://localhost:5173，/api 代理到 http:
 | GET | /api/v1/users | 用户列表 | 管理员 |
 | PUT | /api/v1/users/:id/role | 更新用户角色 | 管理员 |
 | DELETE | /api/v1/users/:id | 删除用户 | 管理员 |
-| GET | /api/v1/projects | 项目列表（status 筛选） | 登录 |
-| POST | /api/v1/projects | 创建项目 | 登录 |
+| GET | /api/v1/projects | 项目列表（status / tag / keyword 可组合筛选，保持分页；多个 tag 为 AND） | 登录 |
+| POST | /api/v1/projects | 创建项目（tags 最多 5 个非空标签，重复自动合并） | 登录 |
 | GET | /api/v1/projects/mine | 我的项目 | 登录 |
 | GET | /api/v1/projects/stats | 项目统计 | 登录 |
-| GET | /api/v1/projects/:id | 项目详情 | 登录 |
-| PUT | /api/v1/projects/:id | 更新项目 | 登录 |
+| GET | /api/v1/projects/:id | 项目详情（含 tags） | 登录 |
+| PUT | /api/v1/projects/:id | 更新项目（已归档项目只读，返回 409） | 登录 |
 | PUT | /api/v1/projects/:id/status | 项目状态流转 | 登录 |
 | DELETE | /api/v1/projects/:id | 删除项目 | 登录 |
 | GET | /api/v1/projects/:id/questions | 问题列表 | 登录 |
@@ -178,13 +178,23 @@ curl -sS -X POST http://localhost:9180/api/v1/auth/login \
 
 TOKEN='<上一步返回的 token>'
 
-# 创建采访项目
+# 创建采访项目（tags 最多 5 个非空标签，重复标签服务端自动合并）
 curl -sS -X POST http://localhost:9180/api/v1/projects \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"title":"老城记忆口述史","interviewee_name":"王奶奶","birth_year":1938,"background":"纺织厂退休工人"}'
+  -d '{"title":"老城记忆口述史","interviewee_name":"王奶奶","birth_year":1938,"background":"纺织厂退休工人","tags":["抗战","知青","女工"]}'
 
-# 项目列表
+# 项目列表（无条件分页）
 curl -sS "http://localhost:9180/api/v1/projects?page=1&page_size=10" -H "Authorization: Bearer $TOKEN"
+
+# 组合检索：状态 + 两个标签(AND) + 标题/受访者关键字，保持分页
+curl -sS "http://localhost:9180/api/v1/projects?page=1&page_size=10&status=in_progress&tag=%E6%8A%97%E6%88%98&tag=%E7%9F%A5%E9%9D%92&keyword=%E7%8E%8B" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 编辑项目并替换标签（body 不带 tags 字段时保留原标签；tags 为 [] 时清空）
+curl -sS -X PUT http://localhost:9180/api/v1/projects/1 \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title":"老城记忆（修订）","tags":["抗战","纺织厂"]}'
+# 已归档项目返回 409：{"code":40902,"message":"项目 1 已归档（状态 archived），标签与基本信息均为只读，禁止修改"}
 
 # 添加采访问题
 curl -sS -X POST http://localhost:9180/api/v1/projects/1/questions \
@@ -262,6 +272,27 @@ curl -sS "http://localhost:9180/api/v1/audit-logs?page=1&page_size=10" -H "Autho
 - `frontend/src/pages/projects/ProjectListPage.tsx`（筛选、流转按钮显隐）
 - `frontend/src/pages/projects/ProjectDetailPage.tsx`（状态流转按钮）
 - `frontend/src/api/types.ts`（ProjectStatus 类型）
+
+### 2.1 项目标签 tags 字段触达清单
+
+业务规则：每个项目最多 5 个非空标签；创建/编辑时自动去除首尾空白并按首次出现顺序合并重复标签；出现空标签或去重后超过 5 个返回 HTTP 400（业务码 `code=42200`）明确拒绝；旧数据没有标签时返回空数组、一切照常；列表支持 `tag`（多个为 AND）与 `keyword`（标题或受访者姓名）组合并保持分页；已归档项目标签与基本信息只读（返回 409，业务码 `code=40902`）。
+
+- 数据库：`backend/migrations/001_init.sql`（project_tags 表、(project_id,name) 唯一索引）
+- 模型：`backend/internal/model/project.go`（ProjectTag 实体、Project.Tags/TagNames）
+- 迁移注册：`backend/internal/database/migrate.go`
+- 常量：`backend/internal/constants/project_tag.go`（ProjectTagMaxCount=5、ProjectTagMaxLength=32）
+- DTO：`backend/internal/dto/project.go`（Create/Update 的 tags、ProjectListQuery.tag/keyword、ProjectResponse.tags）
+- 仓储：`backend/internal/repository/project_repository.go`（Create/UpdateWithTags 事务、ReplaceTags、标签 AND 子查询、LIKE 转义、批量加载避免 N+1）
+- 服务：`backend/internal/service/project_service.go`（normalizeTags 去空白/合并/拒绝、归档只读、组合筛选）
+- 处理器：`backend/internal/handler/project_handler.go`（编辑请求探测 tags 字段是否出现、列表查询绑定）
+- 日志：`backend/internal/constants/log_templates.go`（LogProjectCreate 的 tag_count、LogProjectTagsUpdate、LogProjectListSearch）
+- 接口文档：`backend/api/openapi.yaml`（Project/CreateProjectRequest/UpdateProjectRequest schema、tag/keyword 参数）
+- 前端类型与 API：`frontend/src/api/types.ts`、`frontend/src/api/project.ts`
+- 前端状态：`frontend/src/stores/projectStore.ts`
+- 前端常量：`frontend/src/constants/index.ts`（PROJECT_TAG_MAX_COUNT/MAX_LENGTH）
+- 前端组件：`frontend/src/components/TagInput.tsx`、`ProjectForm.tsx`
+- 前端页面：`ProjectListPage.tsx`（标签列、标签筛选、关键字搜索、分页）、`ProjectDetailPage.tsx`（标签展示、编辑弹窗、归档只读）
+- 测试：`project_service_test.go`（重复合并、超限/空标签拒绝、归档只读、旧数据补录、组合条件）、`project_repository_test.go`（组合筛选 SQL、旧数据空标签、事务写入与清空）
 
 ### 3. 录音状态 RecordingStatus（recording / processing / ready / failed）
 

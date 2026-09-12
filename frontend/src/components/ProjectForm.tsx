@@ -1,11 +1,14 @@
 // 项目创建/编辑表单组件，列表页与详情页复用。
 import { useState } from 'react'
+import TagInput from './TagInput'
+import { PROJECT_TAG_MAX_COUNT } from '../constants'
 
 export interface ProjectFormValues {
   title: string
   interviewee_name: string
   birth_year: number
   background: string
+  tags: string[]
 }
 
 interface ProjectFormProps {
@@ -20,6 +23,7 @@ export default function ProjectForm({ initial = {}, onSubmit, submitText = '保�
     interviewee_name: initial.interviewee_name || '',
     birth_year: initial.birth_year || new Date().getFullYear() - 60,
     background: initial.background || '',
+    tags: initial.tags || [],
   })
   const [saving, setSaving] = useState(false)
 
@@ -28,9 +32,18 @@ export default function ProjectForm({ initial = {}, onSubmit, submitText = '保�
       alert('请填写项目标题与受访者姓名')
       return
     }
+    if (values.tags.length > PROJECT_TAG_MAX_COUNT) {
+      alert(`标签最多 ${PROJECT_TAG_MAX_COUNT} 个`)
+      return
+    }
     setSaving(true)
     try {
-      await onSubmit(values)
+      await onSubmit({
+        ...values,
+        title: values.title.trim(),
+        interviewee_name: values.interviewee_name.trim(),
+        background: values.background.trim(),
+      })
     } finally {
       setSaving(false)
     }
@@ -59,6 +72,10 @@ export default function ProjectForm({ initial = {}, onSubmit, submitText = '保�
       <div className="form-row">
         <label>背景简介</label>
         <textarea value={values.background} onChange={(e) => setValues({ ...values, background: e.target.value })} rows={3} placeholder="受访者背景简介" />
+      </div>
+      <div className="form-row">
+        <label>项目标签（最多 {PROJECT_TAG_MAX_COUNT} 个）</label>
+        <TagInput value={values.tags} onChange={(tags) => setValues({ ...values, tags })} />
       </div>
       <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
         {saving ? '提交中…' : submitText}

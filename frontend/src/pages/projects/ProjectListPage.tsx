@@ -1,4 +1,4 @@
-// 采访项目列表页：创建、筛选、状态流转、删除。
+// 采访项目列表页：创建、标签/关键字/状态组合检索、状态流转、删除。
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ConfirmDialog from '../../components/ConfirmDialog'
@@ -13,29 +13,74 @@ import {
   PROJECT_STATUS_IN_PROGRESS,
   PROJECT_STATUS_OPTIONS,
 } from '../../constants'
+import { usePagination } from '../../hooks/usePagination'
 import { useProjectStore } from '../../stores/projectStore'
 import { formatDateTime } from '../../utils/format'
 import type { Project } from '../../api/types'
 
+const PAGE_SIZE = 20
+
 export default function ProjectListPage() {
   const { projects, total, loading, fetchList, create, transitionStatus, remove } = useProjectStore()
   const [statusFilter, setStatusFilter] = useState('')
+  const [tagFilter, setTagFilter] = useState<string[]>([])
+  const [tagDraft, setTagDraft] = useState('')
+  const [keywordInput, setKeywordInput] = useState('')
+  const [keyword, setKeyword] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [message, setMessage] = useState('')
+  const { page, totalPages, setPage, setTotal } = usePagination(1, PAGE_SIZE)
 
   useEffect(() => {
-    fetchList({ page: 1, page_size: 50, status: statusFilter })
-  }, [fetchList, statusFilter])
+    setTotal(total)
+  }, [total, setTotal])
+
+  useEffect(() => {
+    fetchList({ page, page_size: PAGE_SIZE, status: statusFilter, tag: tagFilter, keyword })
+  }, [fetchList, page, statusFilter, tagFilter, keyword])
+
+  // 任一筛选条件变化都回到第 1 页。
+  const resetPage = useCallback(() => setPage(1), [setPage])
+
+  const flash = (text: string) => {
+    setMessage(text)
+    setTimeout(() => setMessage(''), 3000)
+  }
 
   const handleCreate = useCallback(
     async (values: ProjectFormValues) => {
       await create(values)
       setShowCreate(false)
-      setMessage('采访项目创建成功')
-      setTimeout(() => setMessage(''), 3000)
+      flash('采访项目创建成功')
     },
     [create],
   )
+
+  const addFilterTag = () => {
+    const name = tagDraft.trim()
+    if (!name || tagFilter.includes(name)) {
+      setTagDraft('')
+      return
+    }
+    setTagFilter([...tagFilter, name])
+    setTagDraft('')
+    resetPage()
+  }
+
+  const appendFilterTag = (name: string) => {
+    if (!tagFilter.includes(name)) {
+      setTagFilter([...tagFilter, name])
+      resetPage()
+    }
+  }
+
+  const clearFilters = () => {
+    setStatusFilter('')
+    setTagFilter([])
+    setKeyword('')
+    setKeywordInput('')
+    resetPage()
+  }
 
   const nextStatus = (status: string): string => {
     switch (status) {
@@ -50,6 +95,8 @@ export default function ProjectListPage() {
     }
   }
 
+  const hasFilter = statusFilter !== '' || tagFilter.length > 0 || keyword !== ''
+
   return (
     <div className="page">
       <div className="page-header">
@@ -61,7 +108,13 @@ export default function ProjectListPage() {
       {message && <div className="toast success">{message}</div>}
 
       <div className="filter-bar">
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value)
+            resetPage()
+          }}
+        >
           <option value="">全部状态</option>
           {PROJECT_STATUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -69,6 +122,64 @@ export default function ProjectListPage() {
             </option>
           ))}
         </select>
+        <div className="tag-filter">
+          <div className="tag-chip-row">
+            {tagFilter.map((tag) => (
+              <span key={tag} className="tag-chip tag-chip-active">
+                {tag}
+                <button
+                  type="button"
+                  className="tag-chip-close"
+                  aria-label={`移除筛选标签 ${tag}`}
+                  onClick={() => {
+                    setTagFilter(tagFilter.filter((t) => t !== tag))
+                    resetPage()
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <input
+            value={tagDraft}
+            placeholder="按标签筛选，回车添加（多标签为且）"
+            onChange={(e) => setTagDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                addFilterTag()
+              }
+            }}
+          />
+        </div>
+        <div className="keyword-search">
+          <input
+            value={keywordInput}
+            placeholder="搜索标题或受访者姓名"
+            onChange={(e) => setKeywordInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setKeyword(keywordInput.trim())
+                resetPage()
+              }
+            }}
+          />
+          <button
+            className="btn btn-plain btn-small"
+            onClick={() => {
+              setKeyword(keywordInput.trim())
+              resetPage()
+            }}
+          >
+            搜索
+          </button>
+        </div>
+        {hasFilter && (
+          <button className="btn btn-plain btn-small" onClick={clearFilters}>
+            清除条件
+          </button>
+        )}
         <span className="filter-count">共 {total} 个项目</span>
       </div>
 
@@ -87,6 +198,28 @@ export default function ProjectListPage() {
             ),
           },
           { key: 'interviewee', title: '受访者', render: (p) => `${p.interviewee_name}（${p.birth_year}年生）` },
+          {
+            key: 'tags',
+            title: '标签',
+            render: (p) =>
+              p.tags && p.tags.length > 0 ? (
+                <div className="tag-chip-row">
+                  {p.tags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className="tag-chip tag-chip-link"
+                      title={`按标签「${tag}」筛选`}
+                      onClick={() => appendFilterTag(tag)}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="muted">-</span>
+              ),
+          },
           { key: 'status', title: '状态', render: (p) => <StatusBadge status={p.status} type="project" /> },
           { key: 'created_at', title: '创建时间', render: (p) => formatDateTime(p.created_at) },
           {
@@ -102,8 +235,7 @@ export default function ProjectListPage() {
                     className="btn btn-plain btn-small"
                     onClick={async () => {
                       await transitionStatus(p.id, nextStatus(p.status))
-                      setMessage('项目状态已更新')
-                      setTimeout(() => setMessage(''), 3000)
+                      flash('项目状态已更新')
                     }}
                   >
                     流转至{PROJECT_STATUS_OPTIONS.find((o) => o.value === nextStatus(p.status))?.label}
@@ -116,8 +248,7 @@ export default function ProjectListPage() {
                   danger
                   onConfirm={async () => {
                     await remove(p.id)
-                    setMessage('项目已删除')
-                    setTimeout(() => setMessage(''), 3000)
+                    flash('项目已删除')
                   }}
                 >
                   <button className="btn btn-danger btn-small">删除</button>
@@ -126,9 +257,9 @@ export default function ProjectListPage() {
             ),
           },
         ]}
-        emptyText="暂无采访项目"
+        emptyText={hasFilter ? '没有符合筛选条件的项目' : '暂无采访项目'}
       />
-      {projects.length === 0 && !loading && (
+      {projects.length === 0 && !loading && !hasFilter && (
         <EmptyState
           title="还没有采访项目"
           description="创建一个口述历史采访项目，开始记录受访者的故事"
@@ -138,6 +269,24 @@ export default function ProjectListPage() {
             </button>
           }
         />
+      )}
+
+      {total > PAGE_SIZE && (
+        <div className="pagination">
+          <button className="btn btn-plain btn-small" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+            上一页
+          </button>
+          <span className="pagination-info">
+            第 {page} / {totalPages} 页
+          </span>
+          <button
+            className="btn btn-plain btn-small"
+            disabled={page >= totalPages}
+            onClick={() => setPage(page + 1)}
+          >
+            下一页
+          </button>
+        </div>
       )}
 
       {showCreate && (

@@ -29,6 +29,15 @@ CREATE TABLE IF NOT EXISTS projects (
   INDEX idx_projects_created_by (created_by)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS project_tags (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  project_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(32) NOT NULL,
+  created_at DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_project_tag_name (project_id, name),
+  INDEX idx_project_tags_project (project_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS questions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   project_id BIGINT UNSIGNED NOT NULL,

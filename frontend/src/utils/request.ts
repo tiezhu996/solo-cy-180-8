@@ -24,6 +24,21 @@ export function clearToken() {
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 30000,
+  // 数组参数序列化为重复键（tag=a&tag=b），与 Gin 的 []string 绑定对齐。
+  paramsSerializer: {
+    serialize: (params: Record<string, unknown>) => {
+      const parts: string[] = []
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === '') return
+        if (Array.isArray(value)) {
+          value.forEach((v) => parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`))
+        } else {
+          parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+        }
+      })
+      return parts.join('&')
+    },
+  },
 })
 
 request.interceptors.request.use((config) => {

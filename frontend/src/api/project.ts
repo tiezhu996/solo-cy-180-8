@@ -7,6 +7,7 @@ export interface CreateProjectPayload {
   birth_year: number
   background?: string
   status?: string
+  tags?: string[]
 }
 
 export interface UpdateProjectPayload {
@@ -14,10 +15,19 @@ export interface UpdateProjectPayload {
   interviewee_name?: string
   birth_year?: number
   background?: string
+  tags?: string[]
 }
 
-export function listProjects(params: { page?: number; page_size?: number; status?: string }) {
-  return get<Paged<Project>>('/projects', params)
+export interface ProjectListParams {
+  page?: number
+  page_size?: number
+  status?: string
+  tag?: string[]
+  keyword?: string
+}
+
+export function listProjects(params: ProjectListParams) {
+  return get<Paged<Project>>('/projects', params as Record<string, unknown>)
 }
 
 export function listMyProjects(params: { page?: number; page_size?: number }) {
